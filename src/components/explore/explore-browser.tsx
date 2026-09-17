@@ -435,7 +435,15 @@ export function ExploreBrowser({ manifest, headBlock, validationDate, explorerBa
             ? 1
             : stats.firstPageRows + (page - 1) * manifest.pageSize + 1
           : page * manifest.pageSize + 1;
-  const to = Math.min(total, from + rowsOnPage - 1);
+  /*
+   * With no rows there is no range to state. Computing it anyway gave
+   * `from + 0 - 1`, which rendered as "0--1" for a search whose filters
+   * removed every match. `to` now collapses to zero in that case and can
+   * never fall below `from`, so no render path can produce a negative or
+   * backwards range. The zero-result summary states a count, not a range.
+   */
+  const to =
+    total === 0 ? 0 : Math.max(from, Math.min(total, from + rowsOnPage - 1));
 
   /** One pager drives both modes so the controls behave identically. */
   const pager = searching
@@ -534,23 +542,42 @@ export function ExploreBrowser({ manifest, headBlock, validationDate, explorerBa
                 <span className="text-ink-faint"> (exact lookup, filters not applied)</span>
               </>
             ) : isList ? (
-              <>
-                Showing{" "}
-                <span className="font-mono tabular-nums text-ink">
-                  {formatCount(from)}-{formatCount(to)}
-                </span>{" "}
-                of{" "}
-                <span className="font-mono tabular-nums text-ink">
-                  {formatCount(searchTotal)}
-                </span>{" "}
-                matching <span className="text-ink">{outcome.describe}</span>
-                {filtersNarrowedSearch !== null ? (
-                  <span className="text-ink-faint">
-                    {" "}
-                    (filtered from {formatCount(filtersNarrowedSearch)})
-                  </span>
-                ) : null}
-              </>
+              /*
+               * A search whose filters removed every match states a count
+               * rather than a range. "Showing 0-0" is not wrong so much as
+               * meaningless, and the range arithmetic behind it is what
+               * produced "0--1".
+               */
+              searchTotal === 0 ? (
+                <>
+                  <span className="font-mono tabular-nums text-ink">0</span> launches matching{" "}
+                  <span className="text-ink">{outcome.describe}</span>
+                  {filtersNarrowedSearch !== null ? (
+                    <span className="text-ink-faint">
+                      {" "}
+                      (filtered from {formatCount(filtersNarrowedSearch)})
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  Showing{" "}
+                  <span className="font-mono tabular-nums text-ink">
+                    {formatCount(from)}-{formatCount(to)}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-mono tabular-nums text-ink">
+                    {formatCount(searchTotal)}
+                  </span>{" "}
+                  matching <span className="text-ink">{outcome.describe}</span>
+                  {filtersNarrowedSearch !== null ? (
+                    <span className="text-ink-faint">
+                      {" "}
+                      (filtered from {formatCount(filtersNarrowedSearch)})
+                    </span>
+                  ) : null}
+                </>
+              )
             ) : (
               "Search results"
             )

@@ -484,6 +484,120 @@ describe("search result semantics", () => {
   });
 });
 
+/**
+ * A search whose filters remove every match used to render
+ * "Showing 0--1 of 0 matching ...", because the range end was computed as
+ * `from + rowsOnPage - 1` with both terms zero.
+ *
+ * The suite has no DOM, so these pin the arithmetic and the wording that make
+ * that string unreachable. The counter formula is replayed here exactly as the
+ * component computes it, over the real zero-result case and real non-zero
+ * pages, so a regression in either shows up as a failed assertion rather than
+ * as a string a human has to notice.
+ */
+describe("a zero-result search states a count, never a negative range", () => {
+  const src = fs.readFileSync(
+    path.join(process.cwd(), "src", "components", "explore", "explore-browser.tsx"),
+    "utf8"
+  );
+
+  /** The component's `to`, verbatim. */
+  const rangeEnd = (total: number, from: number, rowsOnPage: number) =>
+    total === 0 ? 0 : Math.max(from, Math.min(total, from + rowsOnPage - 1));
+
+  /** The component's `from` for a list search. */
+  const rangeStart = (total: number, searchPage: number) =>
+    total === 0 ? 0 : searchPage * manifest.pageSize + 1;
+
+  it("collapses the range to zero when nothing matched", () => {
+    const from = rangeStart(0, 0);
+    const to = rangeEnd(0, from, 0);
+    expect(from).toBe(0);
+    expect(to).toBe(0);
+    expect(to).toBeGreaterThanOrEqual(0);
+  });
+
+  it("never yields a negative end index for any page or row count", () => {
+    for (const total of [0, 1, 6, 99, 100, 101, 442]) {
+      for (const page of [0, 1, 5]) {
+        for (const rows of [0, 1, 42, 100]) {
+          const from = rangeStart(total, page);
+          const to = rangeEnd(total, from, rows);
+          expect(to, `total=${total} page=${page} rows=${rows}`).toBeGreaterThanOrEqual(0);
+          expect(to, `total=${total} page=${page} rows=${rows}`).toBeGreaterThanOrEqual(
+            total === 0 ? 0 : from
+          );
+        }
+      }
+    }
+  });
+
+  it("renders the approved zero-result wording, not a range", () => {
+    expect(src).toContain("searchTotal === 0 ? (");
+    expect(src).toContain("</span> launches matching{\" \"}");
+  });
+
+  it("guards the range end in the source, not only in the copy", () => {
+    expect(src).toContain("total === 0 ? 0 : Math.max(from, Math.min(total, from + rowsOnPage - 1))");
+    expect(src).not.toContain("const to = Math.min(total, from + rowsOnPage - 1);");
+  });
+
+  it("formats no negative number, so '-1' cannot reach the summary", () => {
+    // formatCount is the only formatter the summary uses.
+    for (const total of [0, 1, 442]) {
+      const from = rangeStart(total, 0);
+      const to = rangeEnd(total, from, total === 0 ? 0 : Math.min(total, manifest.pageSize));
+      expect(`${from}-${to}`).not.toContain("--");
+      expect(`${from}-${to}`).not.toMatch(/-\d+-\d+/);
+      expect(String(to)).not.toContain("-");
+    }
+  });
+
+  it("leaves non-zero ranges exactly as they were", () => {
+    // 442 matches, the "pixel" case, at the browse page size.
+    expect(rangeStart(442, 0)).toBe(1);
+    expect(rangeEnd(442, 1, 100)).toBe(100);
+    expect(rangeStart(442, 1)).toBe(101);
+    expect(rangeEnd(442, 101, 100)).toBe(200);
+    expect(rangeStart(442, 4)).toBe(401);
+    expect(rangeEnd(442, 401, 42)).toBe(442);
+    // A single match still reads as a one-row range.
+    expect(rangeStart(1, 0)).toBe(1);
+    expect(rangeEnd(1, 1, 1)).toBe(1);
+  });
+
+  it("keeps search pagination counters contiguous and complete", () => {
+    for (const total of [6, 101, 442, 709]) {
+      const pages = Math.ceil(total / manifest.pageSize);
+      let prevTo = 0;
+      for (let p = 0; p < pages; p++) {
+        const rows = Math.min(manifest.pageSize, total - p * manifest.pageSize);
+        const from = rangeStart(total, p);
+        const to = rangeEnd(total, from, rows);
+        expect(from, `total=${total} p=${p}`).toBe(prevTo + 1);
+        expect(to - from + 1, `total=${total} p=${p}`).toBe(rows);
+        prevTo = to;
+      }
+      expect(prevTo, `total=${total} last page`).toBe(total);
+    }
+  });
+
+  it("has a real filter combination that produces zero matches", () => {
+    // "pixel" exists in bucket "pi" but never with the awaiting status, so the
+    // zero-result path is reachable in the shipped dataset, not hypothetical.
+    const bucket = read<NameEntry[]>("name/pi.json");
+    const matches = bucket.filter(([name, symbol]) =>
+      `${name ?? ""} ${symbol ?? ""}`
+        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .some((w) => w.startsWith("pixel"))
+    );
+    expect(matches.length).toBeGreaterThan(0);
+    expect(matches.filter(([, , , , status]) => status === 1)).toHaveLength(0);
+  });
+});
+
 describe("the results region is announced and reachable", () => {
   const src = fs.readFileSync(
     path.join(process.cwd(), "src", "components", "explore", "explore-browser.tsx"),
