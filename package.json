@@ -1,0 +1,37 @@
+{
+  "name": "vibevibe-testnet-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build:explore": "node --max-old-space-size=3072 scripts/build-explore-index.mjs"
+  },
+  "dependencies": {
+    "next": "16.3.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^24.13.5",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "16.3.5",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^5.0.1"
+  },
+  "description": "Unofficial community dashboard for the Vibe/Vibe Testnet Indexer. Read-only view of Robinhood Chain testnet (chain 46630) launch activity.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/itstorvian/vibevibe-testnet-dashboard.git"
+  }
+}

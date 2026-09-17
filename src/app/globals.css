@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens.
+ *
+ * The default Tailwind palette is cleared on purpose. Only the tokens below
+ * exist, so a stray `text-blue-500` fails to compile rather than quietly
+ * widening the palette. Dark surfaces, hairline borders, one accent.
+ *
+ * Amber carries meaning rather than decoration: it marks the current factory
+ * generation, links, and focus. Everything else is neutral.
+ */
+@theme {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  /* Surfaces, near black through charcoal. */
+  --color-canvas: #0a0b0d;
+  --color-surface: #111316;
+  --color-surface-raised: #16181c;
+
+  /* Hairlines. Decorative only: panel edges, table rules, separators. */
+  --color-line: #23262b;
+  --color-line-strong: #31353c;
+
+  /*
+   * Boundaries of interactive controls, kept separate from the decorative
+   * hairlines above. A control has to be identifiable as a control, which
+   * WCAG 1.4.11 puts at 3:1 against its adjacent background. These clear that
+   * against canvas, surface and surface-raised alike (3.45, 3.26, 3.11), so
+   * inputs, selects and buttons read as controls without brightening every
+   * rule on the page to match.
+   */
+  --color-control: #606771;
+  --color-control-strong: #858c96;
+
+  /* Text. Contrast against canvas: 16.3:1, 7.6:1, 5.2:1. */
+  --color-ink: #e8eaed;
+  --color-ink-muted: #9aa1ab;
+  --color-ink-faint: #7d848f;
+
+  /* The single accent. 8.1:1 against canvas. */
+  --color-accent: #d99a2b;
+  --color-accent-dim: #8a6420;
+
+  /*
+   * Distribution bars. Only the current generation is accented; the other two
+   * are neutral greys, dimmer with age. All three clear 3:1 against canvas.
+   */
+  --color-bar-current: #d99a2b;
+  --color-bar-legacy: #7c8794;
+  --color-bar-retired: #5c636e;
+  --color-bar-track: #1c1f24;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "Cascadia Mono",
+    "Segoe UI Mono", Consolas, monospace;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* Native, for the header's in-page section links. No scrolling library. */
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-accent-dim);
+    color: var(--color-ink);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
