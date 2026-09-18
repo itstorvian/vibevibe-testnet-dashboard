@@ -4,7 +4,7 @@ import { blockUrl } from "@/lib/explorer";
 import { formatBlock, formatCount, formatUtcDate, formatUtcDateTime } from "@/lib/format";
 
 export function ProvenancePanel() {
-  const { network, run, source, verification } = activeSnapshot;
+  const { activity, network, run, source, verification } = activeSnapshot;
 
   return (
     <div className="border border-line bg-surface">
@@ -42,6 +42,30 @@ export function ProvenancePanel() {
           wide
         >
           Full history
+        </Field>
+        <Field
+          term="Curve reconstruction"
+          detail="Trades, curve completions, graduations and creator-fee forwards were scanned over the same full range, which is what makes the transaction count a lifetime figure rather than a window's worth"
+          wide
+        >
+          Full history
+        </Field>
+        <Field
+          term="What counts as a transaction"
+          detail={`Distinct transaction hashes across ${activity.includedEventSurfaces.join(
+            ", "
+          )}. A transaction that emits several of these counts once, which is why the three category figures beside the total do not add up to it. Post-graduation trading on Uniswap v4 is not indexed at all and is not included.`}
+          wide
+        >
+          <span className="font-mono tabular-nums">
+            {formatCount(activity.uniqueTransactionCount)}
+          </span>{" "}
+          <span className="text-ink-muted">
+            unique tx hashes ({formatCount(activity.components.launch)} launch,{" "}
+            {formatCount(activity.components.trade)} trade,{" "}
+            {formatCount(activity.components.lifecycle)} lifecycle, minus{" "}
+            {formatCount(activity.sharedAcrossCategories)} counted in more than one)
+          </span>
         </Field>
         <Field
           term="Rpc endpoint"

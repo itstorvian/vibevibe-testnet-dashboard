@@ -1,4 +1,4 @@
-import { snapshot20260917head120753391 } from "@/data/snapshots/2026-09-17-120753391";
+import { snapshot20260918head121309670 } from "@/data/snapshots/2026-09-18-121309670";
 import type { IndexerSnapshot } from "@/data/types";
 
 /**
@@ -9,7 +9,7 @@ import type { IndexerSnapshot } from "@/data/types";
  * current one and repointing this export; Overview and Explore both read from
  * here, so they can never drift onto different runs.
  */
-export const activeSnapshot: IndexerSnapshot = snapshot20260917head120753391;
+export const activeSnapshot: IndexerSnapshot = snapshot20260918head121309670;
 
 export * from "@/data/derive";
 export type * from "@/data/types";

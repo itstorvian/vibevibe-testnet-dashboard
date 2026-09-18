@@ -24,6 +24,17 @@ export function MetricTiles() {
       primary: true,
     },
     {
+      label: "Indexed transactions",
+      /*
+       * Read straight off the snapshot, never counted here. It is distinct
+       * transaction hashes, not events and not trades, and no field on this
+       * page could be combined to reproduce it.
+       */
+      value: formatCount(snapshot.activity.uniqueTransactionCount),
+      note: "Unique tx hashes across full-history launch and curve activity",
+      primary: true,
+    },
+    {
       label: "Current generation",
       value: current ? formatCount(current.launchCount) : "Not available",
       note: current
@@ -43,11 +54,18 @@ export function MetricTiles() {
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
-      {tiles.map((tile) => (
+    <div className="grid grid-cols-1 gap-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      {tiles.map((tile, index) => (
         <div
           key={tile.label}
-          className={`px-5 py-5 ${tile.primary ? "bg-surface" : "bg-canvas"}`}
+          /*
+           * Five tiles leave a hole in the last row at two and three columns,
+           * and the gap-px trick paints that hole in the line colour. The last
+           * tile widens to close it, and returns to one column at five across.
+           */
+          className={`px-5 py-5 ${tile.primary ? "bg-surface" : "bg-canvas"} ${
+            index === tiles.length - 1 ? "sm:col-span-2 xl:col-span-1" : ""
+          }`}
         >
           <p
             className={`font-mono text-[10px] uppercase tracking-widest ${

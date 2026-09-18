@@ -6,8 +6,12 @@
  * these types are the checked half of the agreement and the tests pin them.
  *
  * Deliberately absent: volume, fee totals, burn totals, trade counts, and
- * anything rank-shaped. Those upstream fields are windowed to a block range
- * rather than lifetime, so a browsable table must not carry them.
+ * anything rank-shaped. That is a design choice first, and a scope fact second:
+ * this project shows no rankings or market view at all. The scope fact is that
+ * those upstream fields are windowed to a block range on a default run, so a
+ * browsable table carrying them would imply a completeness they lack. A
+ * full-history run makes the trade-derived ones lifetime figures; they still do
+ * not belong here.
  */
 
 export type GenerationCode = 0 | 1 | 2;

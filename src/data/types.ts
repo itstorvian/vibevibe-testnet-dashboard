@@ -118,11 +118,28 @@ export interface CoverageNote {
   factoryDiscovery: "manually-configured";
   factoriesConfigured: number;
   /**
-   * Contracts that emitted a curve-shaped event but are not a configured
-   * factory's curve, within the run's trade window. A new factory generation
-   * would show up here. Zero on this run.
+   * Indexer `foreignActivity.curveLogsIgnored`: LOG events that carried a curve
+   * event signature but came from a contract that is not a configured factory's
+   * curve, across the run's curve scan.
+   *
+   * This counts logs, not contracts. The two are not interchangeable and the
+   * field is named for what it measures: one contract can emit hundreds of
+   * these. An earlier run reported zero only because its curve scan was a
+   * 200,000-block window; a full-history scan sees far more of the chain.
+   *
+   * A new factory generation would appear here. So would any unrelated contract
+   * that happens to emit an event with the same signature, and nothing in the
+   * upstream project can tell those apart.
    */
-  unrecognizedCurveEventContracts: number;
+  unrecognizedCurveEventLogs: number;
+  /**
+   * Distinct unrecognized contracts the run recorded, for manual review.
+   *
+   * The indexer stops collecting addresses at 20, so this is a floor and not a
+   * total whenever `unrecognizedContractSampleIsCapped` is true.
+   */
+  unrecognizedContractsSampled: number;
+  unrecognizedContractSampleIsCapped: boolean;
   note: string;
 }
 
@@ -132,6 +149,63 @@ export interface VerificationRecord {
   date: string;
   /** What that run actually did, in one sentence. */
   evidence: string;
+}
+
+/**
+ * Platform-wide transaction activity, mirrored from the indexer's
+ * `output/activity.json`.
+ *
+ * WHAT THIS COUNTS, and why the distinction matters enough to be a type:
+ *
+ * The unit is the transaction hash, deduplicated globally. It is not an event
+ * count and not a trade count. One transaction routinely emits several indexed
+ * events, so summing rows, or summing the three component counts below,
+ * overstates the figure by exactly the overlap.
+ *
+ * Nothing here is computed in the interface. The number is carried from a
+ * validated run and rendered, so it can never drift from the run it is stamped
+ * with.
+ */
+export interface TransactionActivity {
+  /** Indexer `uniqueTransactionCount`. The union of the components below. */
+  uniqueTransactionCount: number;
+  /** Indexer `scope`. Deliberately not "all Vibe/Vibe transactions". */
+  scope: "launch-and-curve-events";
+  /**
+   * Literal `true`, so a windowed curve scan is unrepresentable here.
+   *
+   * A transaction count shown beside lifetime launch totals has to be a
+   * lifetime figure too. The indexer only produces one under `--full-trades`,
+   * and a snapshot from a windowed run is a compile error rather than a review
+   * catch.
+   */
+  isFullHistory: true;
+  /**
+   * Distinct transaction hashes within each category.
+   *
+   * These do NOT sum to `uniqueTransactionCount`, and are published so a reader
+   * can see by how much: a graduating buy emits a trade and a lifecycle event
+   * from one transaction, and a launch with an initial buy emits a launch and a
+   * trade event from one transaction.
+   */
+  components: {
+    /** Indexer `launchTransactionCount`. */
+    launch: number;
+    /** Indexer `tradeTransactionCount`. */
+    trade: number;
+    /** Indexer `lifecycleTransactionCount`. */
+    lifecycle: number;
+  };
+  /** Indexer `sharedAcrossCategories`: how much the naive sum overstates by. */
+  sharedAcrossCategories: number;
+  /** Indexer `includedEventSurfaces`. The exact events that contribute. */
+  includedEventSurfaces: readonly string[];
+  /**
+   * Indexer `exclusions`: what a Vibe/Vibe transaction can be and still be
+   * absent from the count. Carried verbatim rather than paraphrased, because
+   * the interface publishes the number and therefore owes the reader its edges.
+   */
+  exclusions: readonly string[];
 }
 
 /** Where the numbers came from, so a reader can check them. */
@@ -148,9 +222,14 @@ export interface SnapshotSource {
  *
  * `dataKind` is a literal union with no "live" member on purpose. Labelling
  * snapshot data as live would be a type error, not a review catch.
+ *
+ * SCHEMA 2 added `activity` and split the curve scan out of `windowedScans`.
+ * A schema-1 snapshot came from a run whose curve scan was windowed, so it
+ * cannot carry a lifetime transaction count and cannot be upgraded by hand:
+ * only a new `--full-trades` run produces one.
  */
 export interface IndexerSnapshot {
-  schemaVersion: 1;
+  schemaVersion: 2;
   dataKind: "point-in-time-validated-run";
   access: "read-only";
   environment: "testnet";
@@ -176,11 +255,17 @@ export interface IndexerSnapshot {
      */
     launchScanIsFullHistory: true;
     /**
+     * Curve events (trades, completions, graduations, creator-fee forwards)
+     * were also scanned from the earliest factory deployment to head, under
+     * the indexer's `--full-trades`. That is what makes `activity` a lifetime
+     * figure rather than a window's worth.
+     */
+    curveScanIsFullHistory: true;
+    /**
      * Scans that were windowed on this run. Anything derived from these is
      * NOT a lifetime total and is deliberately not shown on the overview.
      */
     windowedScans: {
-      trades: readonly [number, number];
       burns: readonly [number, number];
     };
     sanityChecks: { passed: number; total: number };
@@ -201,6 +286,13 @@ export interface IndexerSnapshot {
   };
 
   generations: readonly GenerationSummary[];
+  /**
+   * Transactions, counted by distinct hash. Stored rather than derived: it
+   * cannot be reconstructed from anything else in this contract, and computing
+   * it in the interface from unrelated fields is exactly the mistake the type
+   * exists to prevent.
+   */
+  activity: TransactionActivity;
   coverage: CoverageNote;
   source: SnapshotSource;
 }

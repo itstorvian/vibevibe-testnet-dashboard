@@ -29,7 +29,7 @@ export default function OverviewPage() {
         <Section
           id="indexed-activity"
           title="Indexed activity"
-          description="Launch activity reconstructed from full-history onchain data."
+          description="Launch and transaction activity reconstructed from full-history onchain data. Transactions are counted by distinct hash, so one transaction emitting several events counts once."
         >
           <MetricTiles />
         </Section>

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { activeSnapshot, totalLaunches } from "@/data";
+import { exploreSource } from "@/data/explore-source";
 import {
   decodeRow,
   GENERATION_IDS,
@@ -61,25 +62,66 @@ describe("manifest is the authority", () => {
   });
 });
 
-describe("Overview and Explore share one snapshot identity", () => {
-  it("agrees on the total launch count", () => {
-    expect(manifest.totals.all).toBe(totalLaunches(activeSnapshot));
-  });
-
-  it("agrees on every per-generation count", () => {
-    for (const g of activeSnapshot.generations) {
-      expect(manifest.totals[g.id]).toBe(g.launchCount);
+/**
+ * Overview and Explore were built from one run until 2026-09-18, and this
+ * suite asserted they agreed on every total.
+ *
+ * They no longer share a run. Rebuilding the shards needs head state read for
+ * every launch; the run that established the transaction count sampled it
+ * instead, because reading it for ~98,000 launches is tens of thousands of RPC
+ * calls the metric does not need. Rebuilding from that run would have emptied
+ * the name, symbol and status column on every row.
+ *
+ * So the guarantee changed shape rather than being dropped: each surface must
+ * NAME the run it was built from, and must not borrow the other's head block.
+ * That is the claim worth enforcing, and it is stronger than silence.
+ */
+describe("each surface names the run it was built from", () => {
+  it("keeps the declared Explore source honest against the shards themselves", () => {
+    expect(manifest.totals.all).toBe(exploreSource.launchCount);
+    expect(manifest.blockRange.max).toBeLessThanOrEqual(exploreSource.headBlock);
+    for (const g of GENERATION_IDS) {
+      expect(manifest.lastObservedLaunchBlock[g]).toBeLessThanOrEqual(exploreSource.headBlock);
     }
   });
 
-  it("agrees on every last observed launch block", () => {
-    for (const g of activeSnapshot.generations) {
-      expect(manifest.lastObservedLaunchBlock[g.id]).toBe(g.lastObservedLaunchBlock);
+  it("never lets Explore claim a head block newer than its own run", () => {
+    expect(exploreSource.headBlock).toBeLessThanOrEqual(activeSnapshot.run.headBlock);
+  });
+
+  it("renders Explore's own run, never the Overview's", () => {
+    const src = fs.readFileSync(
+      path.join(process.cwd(), "src", "app", "explore", "page.tsx"),
+      "utf8"
+    );
+    expect(src).toContain("const run = exploreSource;");
+    expect(src).not.toContain("const { run, network } = activeSnapshot");
+    // The badge above the table has to be told which run to advertise.
+    expect(src).toContain("<SnapshotBadge validationDate={run.validationDate}");
+  });
+
+  it("discloses the gap on the page whenever the two runs differ", () => {
+    const src = fs.readFileSync(
+      path.join(process.cwd(), "src", "app", "explore", "page.tsx"),
+      "utf8"
+    );
+    expect(src).toContain("overviewIsNewer");
+    expect(src).toContain("The Overview is on a newer run");
+    if (activeSnapshot.run.headBlock !== exploreSource.headBlock) {
+      // The condition that makes that paragraph render is really met.
+      expect(activeSnapshot.run.headBlock).toBeGreaterThan(exploreSource.headBlock);
+      expect(totalLaunches(activeSnapshot)).toBeGreaterThanOrEqual(manifest.totals.all);
     }
   });
 
-  it("never indexes a launch past the snapshot head block", () => {
-    expect(manifest.blockRange.max).toBeLessThanOrEqual(activeSnapshot.run.headBlock);
+  it("explains why the two runs differ rather than just noting that they do", () => {
+    expect(exploreSource.note).toMatch(/enrich/i);
+    expect(exploreSource.note.length).toBeGreaterThan(40);
+  });
+
+  it("stays internally consistent: shard totals still sum to the shard total", () => {
+    const sum = GENERATION_IDS.reduce((acc, g) => acc + manifest.totals[g], 0);
+    expect(sum).toBe(manifest.totals.all);
   });
 });
 

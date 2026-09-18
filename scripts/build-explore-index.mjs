@@ -38,9 +38,13 @@ const GENERATION_VIEWS = ["all", "retired", "legacy", "current"];
 const STATUS_VIEWS = ["any", "trading", "awaiting", "graduated"];
 
 /**
- * Fields that must never reach a shard. They are windowed to a block range in
- * the upstream run and are not lifetime totals, so presenting them in a
- * browsable table would imply a completeness the data does not have.
+ * Fields that must never reach a shard.
+ *
+ * Two independent reasons, and the first outlives the second: this project
+ * shows no rankings and no market view, by design. On top of that, these fields
+ * are windowed to a block range on a default upstream run, so presenting them
+ * would imply a completeness the data does not have. A --full-trades run makes
+ * the trade-derived ones lifetime figures and this exclusion still stands.
  */
 const FORBIDDEN_KEYS = /(volume|burn|totalfees|feeswei|trade|rank|score|trending|price|marketcap)/i;
 

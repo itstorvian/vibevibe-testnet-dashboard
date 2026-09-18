@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { ExploreBrowser } from "@/components/explore/explore-browser";
 import { SnapshotBadge } from "@/components/snapshot-badge";
 import { activeSnapshot } from "@/data";
+import { exploreSource } from "@/data/explore-source";
 import type { ExploreManifest } from "@/data/explore-types";
 import { formatBlock, formatCount, formatUtcDate } from "@/lib/format";
 
@@ -26,7 +27,15 @@ function readManifest(): ExploreManifest {
 
 export default function ExplorePage() {
   const manifest = readManifest();
-  const { run, network } = activeSnapshot;
+  const { network } = activeSnapshot;
+  /*
+   * Explore reads its own run, not the Overview's. The shards are built from a
+   * fully enriched run; the Overview tracks the later full-history run that
+   * established the transaction count. Borrowing `activeSnapshot.run` here
+   * would print a head block these rows were never built at.
+   */
+  const run = exploreSource;
+  const overviewIsNewer = activeSnapshot.run.headBlock > exploreSource.headBlock;
 
   return (
     <main id="main" tabIndex={-1} className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
@@ -40,7 +49,7 @@ export default function ExplorePage() {
           ranking or a market view.
         </p>
         <div className="mt-6">
-          <SnapshotBadge />
+          <SnapshotBadge validationDate={run.validationDate} headBlock={run.headBlock} />
         </div>
       </div>
 
@@ -64,6 +73,21 @@ export default function ExplorePage() {
         after that block are not here. Names and symbols are chosen by whoever created the launch
         and are shown exactly as they appear on chain.
       </p>
+
+      {overviewIsNewer ? (
+        <p className="mt-4 max-w-3xl text-sm leading-relaxed text-ink-muted">
+          The Overview is on a newer run, indexed through block{" "}
+          <span className="font-mono tabular-nums text-ink">
+            {formatBlock(activeSnapshot.run.headBlock)}
+          </span>
+          , so its launch total is higher than the{" "}
+          <span className="font-mono tabular-nums text-ink">
+            {formatCount(manifest.totals.all)}
+          </span>{" "}
+          browsable here. {run.note} Each page reports the run its own numbers came from rather
+          than borrowing the other&apos;s.
+        </p>
+      ) : null}
     </main>
   );
 }

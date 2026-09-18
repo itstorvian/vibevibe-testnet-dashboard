@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   activeSnapshot,
@@ -38,14 +40,14 @@ function* walk(
 
 describe("launch totals", () => {
   it("sums the generations to the total the validation run reported", () => {
-    expect(totalLaunches(snapshot)).toBe(96_490);
+    expect(totalLaunches(snapshot)).toBe(97_733);
   });
 
   it("carries the per-generation counts from the adopted run", () => {
     const counts = Object.fromEntries(
       snapshot.generations.map((g) => [g.id, g.launchCount])
     );
-    expect(counts).toEqual({ retired: 14_799, legacy: 43_016, current: 38_675 });
+    expect(counts).toEqual({ retired: 14_800, legacy: 43_220, current: 39_713 });
   });
 
   it("derives the total rather than storing it, so the parts cannot disagree", () => {
@@ -205,9 +207,9 @@ describe("graduation targets", () => {
 
 describe("run metadata", () => {
   it("records the head block and validation date of the run", () => {
-    expect(snapshot.run.headBlock).toBe(120_753_391);
-    expect(snapshot.run.validationDate).toBe("2026-09-17");
-    expect(snapshot.run.finishedAt).toBe("2026-09-17T11:29:01.629Z");
+    expect(snapshot.run.headBlock).toBe(121_309_670);
+    expect(snapshot.run.validationDate).toBe("2026-09-18");
+    expect(snapshot.run.finishedAt).toBe("2026-09-18T17:00:25.492Z");
   });
 
   it("reports launch reconstruction as full history", () => {
@@ -218,14 +220,43 @@ describe("run metadata", () => {
     expect(snapshot.run.sanityChecks).toEqual({ passed: 5, total: 5 });
   });
 
-  it("observed all three factories producing launches near the head block", () => {
+  it("observed all three factories producing launches, long after each was deployed", () => {
     for (const generation of snapshot.generations) {
       expect(generation.observedStillProducingLaunches).toBe(true);
       expect(generation.lastObservedLaunchBlock).toBeLessThanOrEqual(
         snapshot.run.headBlock
       );
-      expect(blocksBehindHead(generation, snapshot.run.headBlock)).toBeLessThan(200_000);
+      expect(generation.lastObservedLaunchBlock).toBeGreaterThan(generation.deploymentBlock);
     }
+  });
+
+  /**
+   * The earlier assertion here was that every generation's most recent launch
+   * sat within 200,000 blocks of the head. That held while it did and stopped
+   * holding on this run: the retired factory's most recent launch is 245,403
+   * blocks back while the current factory's is 3,086.
+   *
+   * Relaxing the bound to fit would have thrown away the point. The claim worth
+   * protecting was never "all three are equally current" -- it is "retired is
+   * the operator's label, not an observed state, so do not drop that factory".
+   * That is what these assert, and the interface shows the distance rather than
+   * flattening it.
+   */
+  it("keeps the retired factory in the dataset despite the operator's label", () => {
+    const retired = generationById(snapshot, "retired");
+    expect(retired?.observedStillProducingLaunches).toBe(true);
+    expect(retired?.launchCount).toBeGreaterThan(14_000);
+    expect(retired?.operatorListing).toMatch(/absent/i);
+  });
+
+  it("does not pretend the retired factory is as current as the others", () => {
+    const retired = generationById(snapshot, "retired")!;
+    const current = generationById(snapshot, "current")!;
+    expect(blocksBehindHead(retired, snapshot.run.headBlock)).toBeGreaterThan(
+      blocksBehindHead(current, snapshot.run.headBlock)
+    );
+    // The gap is disclosed in words, not just implied by two block numbers.
+    expect(retired.note).toContain("245,403 blocks below the head");
   });
 
   it("names the source so a reader can check the numbers", () => {
@@ -238,10 +269,10 @@ describe("run metadata", () => {
   });
 
   it("dates fee models to the run that actually re-read them", () => {
-    expect(snapshot.verification.feeModels.date).toBe("2026-09-17");
+    expect(snapshot.verification.feeModels.date).toBe("2026-09-18");
     expect(snapshot.verification.feeModels.date).toBe(snapshot.run.validationDate);
     for (const g of snapshot.generations) {
-      expect(g.feeModel.verifiedAt).toBe("2026-09-17");
+      expect(g.feeModel.verifiedAt).toBe("2026-09-18");
     }
   });
 
@@ -293,8 +324,12 @@ describe("no windowed aggregate reaches the interface", () => {
   });
 
   it("records the windowed scan bounds only as metadata about the run", () => {
-    expect(snapshot.run.windowedScans.trades[1]).toBe(snapshot.run.headBlock);
     expect(snapshot.run.windowedScans.burns[1]).toBe(snapshot.run.headBlock);
+  });
+
+  it("no longer windows the curve scan, which is what makes activity a lifetime figure", () => {
+    expect(snapshot.run.curveScanIsFullHistory).toBe(true);
+    expect(snapshot.run.windowedScans).not.toHaveProperty("trades");
   });
 });
 
@@ -313,5 +348,112 @@ describe("no credentials or private endpoints", () => {
       .filter((entry) => typeof entry.value === "string" && credentialish.test(entry.value))
       .map((entry) => entry.path.join("."));
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("indexed transactions", () => {
+  const { activity } = snapshot;
+
+  it("carries the transaction count the validation run reported", () => {
+    expect(activity.uniqueTransactionCount).toBe(2_098_026);
+    expect(Number.isSafeInteger(activity.uniqueTransactionCount)).toBe(true);
+  });
+
+  it("names a scope narrower than the whole protocol", () => {
+    expect(activity.scope).toBe("launch-and-curve-events");
+  });
+
+  it("is a lifetime figure, because every contributing scan was full history", () => {
+    expect(activity.isFullHistory).toBe(true);
+    expect(snapshot.run.launchScanIsFullHistory).toBe(true);
+    expect(snapshot.run.curveScanIsFullHistory).toBe(true);
+  });
+
+  it("counts transactions, not events: the total is the union of the categories", () => {
+    const { launch, trade, lifecycle } = activity.components;
+    const naiveSum = launch + trade + lifecycle;
+    expect(naiveSum - activity.sharedAcrossCategories).toBe(activity.uniqueTransactionCount);
+  });
+
+  it("never exceeds the sum, and never falls below its largest part", () => {
+    const parts = Object.values(activity.components);
+    expect(activity.uniqueTransactionCount).toBeLessThanOrEqual(
+      parts.reduce((a, b) => a + b, 0)
+    );
+    expect(activity.uniqueTransactionCount).toBeGreaterThanOrEqual(Math.max(...parts));
+  });
+
+  it("cannot have more launch transactions than launches", () => {
+    // Every launch carries exactly one deployment transaction, and
+    // deduplication can only reduce that count, never raise it.
+    expect(activity.components.launch).toBeLessThanOrEqual(totalLaunches(snapshot));
+  });
+
+  it("reports the overlap rather than hiding it", () => {
+    expect(activity.sharedAcrossCategories).toBeGreaterThanOrEqual(0);
+    expect(activity.sharedAcrossCategories).toBe(55_895);
+  });
+
+  it("lists exactly the event surfaces that contribute", () => {
+    expect([...activity.includedEventSurfaces]).toEqual([
+      "TokenLaunched",
+      "TokenLaunchedQuoted",
+      "Bought",
+      "Sold",
+      "CurveCompleted",
+      "Graduated",
+      "CreatorFeesForwarded",
+    ]);
+  });
+
+  it("discloses what a Vibe/Vibe transaction can be and still be missing", () => {
+    const text = activity.exclusions.join(" ");
+    expect(activity.exclusions.length).toBeGreaterThan(0);
+    expect(text).toMatch(/post-graduation/i);
+    expect(text).toMatch(/burn/i);
+    expect(text).toMatch(/LaunchFeesClaimed/);
+    expect(text).toMatch(/not configured|unconfigured/i);
+  });
+
+  it("never calls itself a total", () => {
+    const claims = [...walk(activity)]
+      .filter(
+        (entry) =>
+          typeof entry.value === "string" &&
+          /\b(total|all|every)\s+(vibe\/?vibe\s+)?transactions\b/i.test(entry.value)
+      )
+      .map((entry) => entry.path.join("."));
+    expect(claims).toEqual([]);
+  });
+});
+
+describe("the transaction count originates upstream, not in the interface", () => {
+  const read = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+
+  it("is rendered straight from the snapshot", () => {
+    const tiles = read("src/components/metric-tiles.tsx");
+    expect(tiles).toContain("snapshot.activity.uniqueTransactionCount");
+    expect(tiles).toContain("Indexed transactions");
+  });
+
+  it("is never arithmetic over other dashboard fields", () => {
+    // `totalLaunches` is summed here on purpose; a transaction count must not
+    // be, because no combination of the fields in this contract produces it.
+    const derive = read("src/data/derive.ts");
+    expect(derive).not.toMatch(/transaction/i);
+    for (const rel of [
+      "src/components/metric-tiles.tsx",
+      "src/components/provenance-panel.tsx",
+      "src/components/limitations-note.tsx",
+    ]) {
+      expect(read(rel)).not.toMatch(/uniqueTransactionCount\s*[-+*/]/);
+      expect(read(rel)).not.toMatch(/components\.(launch|trade|lifecycle)\s*\+/);
+    }
+  });
+
+  it("formats with the shared count formatter, not a locale-dependent one", () => {
+    const tiles = read("src/components/metric-tiles.tsx");
+    expect(tiles).toMatch(/formatCount\(snapshot\.activity\.uniqueTransactionCount\)/);
+    expect(tiles).not.toContain("toLocaleString");
   });
 });

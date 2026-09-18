@@ -22,8 +22,8 @@ function GenerationPanel({ generation }: { generation: GenerationSummary }) {
    * on a point-in-time snapshot, read as live, and was set on all three
    * generations anyway, so it distinguished nothing while implying the retired
    * factory was active. The gap is an observation rather than a claim, and it
-   * separates a generation that launched 223 blocks ago from one that last
-   * launched 130,596 blocks ago.
+   * separates a generation that launched 3,086 blocks ago from one that last
+   * launched 245,403 blocks ago.
    */
   const behind = blocksBehindHead(generation, headBlock);
 
