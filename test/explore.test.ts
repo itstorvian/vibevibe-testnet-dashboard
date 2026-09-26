@@ -18,8 +18,8 @@ import {
 
 /**
  * These tests read the generated shards, not a fixture. They fail if a rebuild
- * ever produces a dataset that disagrees with the snapshot Overview renders,
- * or that smuggles a windowed field into a browsable table.
+ * ever produces a dataset that disagrees with Explore's declared source run,
+ * borrows Overview's newer provenance, or adds a windowed field to the table.
  */
 
 const ROOT = path.join(process.cwd(), "public", "explore");

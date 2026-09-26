@@ -1,4 +1,6 @@
 import type { IndexerSnapshot } from "@/data/types";
+import { validateParticipantSnapshot } from "@/data/participants";
+import participantArtifact from "./participants-2026-09-18-121309670.json";
 
 /**
  * Authoritative snapshot: the full-history run of 2026-09-18 at head block
@@ -43,7 +45,7 @@ import type { IndexerSnapshot } from "@/data/types";
  * `@/data/derive`, so the headline can never drift from its parts.
  */
 export const snapshot20260918head121309670 = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   dataKind: "point-in-time-validated-run",
   access: "read-only",
   environment: "testnet",
@@ -209,6 +211,10 @@ export const snapshot20260918head121309670 = {
       "Launches from a factory generation that is not configured in config/factories.ts. An unconfigured factory is never scanned, silently.",
     ],
   },
+
+  // Produced by the indexer's frozen replay. This later derivation retains the
+  // original source run and does not change Explore's separately enriched source.
+  participants: validateParticipantSnapshot(participantArtifact),
 
   coverage: {
     factoryDiscovery: "manually-configured",

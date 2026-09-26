@@ -2,6 +2,7 @@ import { FactorySummary } from "@/components/factory-summary";
 import { GenerationDistribution } from "@/components/generation-distribution";
 import { LimitationsNote } from "@/components/limitations-note";
 import { MetricTiles } from "@/components/metric-tiles";
+import { ParticipationDetails } from "@/components/participation-details";
 import { ProvenancePanel } from "@/components/provenance-panel";
 import { Section } from "@/components/section";
 import { SnapshotBadge } from "@/components/snapshot-badge";
@@ -29,9 +30,17 @@ export default function OverviewPage() {
         <Section
           id="indexed-activity"
           title="Indexed activity"
-          description="Launch and transaction activity reconstructed from full-history onchain data. Transactions are counted by distinct hash, so one transaction emitting several events counts once."
+          description="Launches, transactions and actor addresses reconstructed from full-history onchain data. Transactions are counted by distinct hash; actor addresses are deduplicated globally across creator, buyer and seller roles."
         >
           <MetricTiles />
+        </Section>
+
+        <Section
+          id="address-participation"
+          title="Address participation"
+          description="The broader participant measure, overlapping categories and the exact event roles covered."
+        >
+          <ParticipationDetails participants={activeSnapshot.participants} />
         </Section>
 
         <Section

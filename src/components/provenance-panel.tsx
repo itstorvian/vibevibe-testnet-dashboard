@@ -1,10 +1,12 @@
 import { Field } from "@/components/field";
 import { activeSnapshot } from "@/data";
+import type { IndexerSnapshot } from "@/data/types";
 import { blockUrl } from "@/lib/explorer";
 import { formatBlock, formatCount, formatUtcDate, formatUtcDateTime } from "@/lib/format";
 
-export function ProvenancePanel() {
-  const { activity, network, run, source, verification } = activeSnapshot;
+export function ProvenancePanel({ snapshot = activeSnapshot }: { snapshot?: IndexerSnapshot } = {}) {
+  const { activity, network, participants, run, source, verification } = snapshot;
+  const incremental = participants.validation.incremental;
 
   return (
     <div className="border border-line bg-surface">
@@ -29,6 +31,11 @@ export function ProvenancePanel() {
         </Field>
         <Field term="Validation date">{formatUtcDate(run.validationDate)}</Field>
         <Field term="Run finished">{formatUtcDateTime(run.finishedAt)}</Field>
+        {participants.sourceRun.headBlockHash && (
+          <Field term="Pinned head hash" detail="Canonical hash checked before and after the delta scan" wide>
+            <span className="font-mono break-all">{participants.sourceRun.headBlockHash}</span>
+          </Field>
+        )}
         <Field term="Sanity checks">
           <span className="font-mono tabular-nums">
             {formatCount(run.sanityChecks.passed)} of {formatCount(run.sanityChecks.total)}
@@ -38,18 +45,30 @@ export function ProvenancePanel() {
 
         <Field
           term="Launch reconstruction"
-          detail="Scanned from the earliest factory deployment to the head block above, which is why launch counts are lifetime totals"
+          detail="Complete event coverage from the earliest configured factory deployment through the head block above, including any reconciled historical prefix"
           wide
         >
           Full history
         </Field>
         <Field
           term="Curve reconstruction"
-          detail="Trades, curve completions, graduations and creator-fee forwards were scanned over the same full range, which is what makes the transaction count a lifetime figure rather than a window's worth"
+          detail="Trades, curve completions, graduations and creator-fee forwards cover the same complete range; the transaction count is globally deduplicated across that history"
           wide
         >
           Full history
         </Field>
+        {incremental && (
+          <Field
+            term="Incremental coverage"
+            detail={`The historical prefix through block ${formatBlock(incremental.prefixHeadBlock)} was preserved and reconciled. Only blocks ${formatBlock(incremental.deltaFromBlock)}–${formatBlock(incremental.deltaToBlock)} were scanned to advance this snapshot. The indexer re-derived global counts from the combined event history.`}
+            wide
+          >
+            <span className="block">Preserved prefix + validated delta</span>
+            <span className="mt-1 block break-all font-mono text-[11px] text-ink-muted">
+              {incremental.proofFile} · SHA-256 {incremental.proofSha256}
+            </span>
+          </Field>
+        )}
         <Field
           term="What counts as a transaction"
           detail={`Distinct transaction hashes across ${activity.includedEventSurfaces.join(
@@ -120,10 +139,10 @@ export function ProvenancePanel() {
           taken on trust.
         </p>
         <p className="text-sm leading-relaxed text-ink-muted">
-          Nothing here is live. Everything on this page comes from that single run and stays
-          fixed until a newer one is connected. It is a point in time observation of a chain
-          that keeps moving, not a standing total, and nothing updates by itself. Re-running
-          the indexer produces a newer snapshot to swap in.
+          Nothing here is live. Event counts are fixed at the head block shown above and stay
+          fixed until a newer validated snapshot is connected. Fee models, graduation targets
+          and address-book evidence retain their own verification dates. Advancing event
+          history does not imply that this other metadata was read again.
         </p>
       </div>
     </div>

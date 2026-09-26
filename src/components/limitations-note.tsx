@@ -1,14 +1,15 @@
 import { activeSnapshot } from "@/data";
+import type { IndexerSnapshot } from "@/data/types";
 import { formatBlock, formatCount, formatUtcDate } from "@/lib/format";
 
-export function LimitationsNote() {
-  const { activity, coverage, run, source } = activeSnapshot;
+export function LimitationsNote({ snapshot = activeSnapshot }: { snapshot?: IndexerSnapshot } = {}) {
+  const { activity, coverage, run, source } = snapshot;
 
   const points = [
     {
       title: "Factory discovery is manual",
       body:
-        "No on-chain registry of factories was found, so the indexer works from a hand maintained list. A factory missing from it is never scanned, and its launches would be absent here with no error or warning. Counts cover what the indexer saw, not the whole chain.",
+        "No on-chain registry of factories was found, so the indexer works from a hand maintained list. Counts cover configured factories and their curves. Additional event-signature checks can find other emitters, but cannot establish complete discovery of every possible protocol deployment.",
     },
     {
       title: "Transactions are indexed, not total",
@@ -16,10 +17,10 @@ export function LimitationsNote() {
         "The transaction figure counts distinct transaction hashes on the launch and curve event surfaces this indexer reads. It is not every Vibe/Vibe transaction, and nothing here could establish that it was. What falls outside it is listed below.",
     },
     {
-      title: "This is one run, not a feed",
-      body: `Every number comes from the validation run of ${formatUtcDate(
+      title: "A fixed snapshot",
+      body: `Event counts were validated on ${formatUtcDate(
         run.validationDate
-      )}. Launches were still being created as that run reached its head block, so the real totals are already higher.`,
+      )} through block ${formatBlock(run.headBlock)}. The chain continues moving. Separately verified metadata keeps its own evidence date.`,
     },
     {
       title: "Testnet research data",
@@ -80,14 +81,8 @@ export function LimitationsNote() {
         {coverage.unrecognizedContractSampleIsCapped
           ? " (the indexer stops recording addresses at twenty, so that is a floor)"
           : ""}
-        . A shared event signature is not evidence of a Vibe/Vibe deployment: an unrelated
-        contract, a fork or another launchpad produces identical evidence, and the indexer
-        cannot tell them apart. Every contract behind those logs was reviewed by hand after
-        the run, not just the sampled ones: none matched a Vibe curve&apos;s bytecode, none
-        answered the Vibe-specific curve functions, none named a known Vibe launch token, and
-        a signature-wide search of the blocks where they were active found only the three
-        configured factories launching tokens. That is a negative result for the range
-        examined, not proof that no other factory exists. A fuller writeup lives in{" "}
+        . A shared event signature alone does not establish a Vibe/Vibe deployment. A fuller
+        writeup lives in{" "}
         <span className="font-mono text-ink-faint">docs/known-limitations.md</span> in the{" "}
         <a
           href={source.repositoryUrl}
@@ -99,6 +94,7 @@ export function LimitationsNote() {
         </a>
         , and a Known Limitations section is planned here.
       </p>
+      <p className="max-w-3xl text-sm leading-relaxed text-ink-muted">{coverage.note}</p>
     </div>
   );
 }

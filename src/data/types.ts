@@ -10,6 +10,8 @@
  */
 
 /** Indexer `generation`. Factory generations observed on chain 46630. */
+import type { ParticipantSnapshot } from "@/data/participants";
+
 export type GenerationId = "retired" | "legacy" | "current";
 
 /**
@@ -227,9 +229,12 @@ export interface SnapshotSource {
  * A schema-1 snapshot came from a run whose curve scan was windowed, so it
  * cannot carry a lifetime transaction count and cannot be upgraded by hand:
  * only a new `--full-trades` run produces one.
+ * SCHEMA 3 adds a runtime-validated participant artifact derived from the same
+ * authoritative event history. A current snapshot can preserve a reconciled
+ * historical prefix and append a separately validated, contiguous delta.
  */
 export interface IndexerSnapshot {
-  schemaVersion: 2;
+  schemaVersion: 3;
   dataKind: "point-in-time-validated-run";
   access: "read-only";
   environment: "testnet";
@@ -250,15 +255,14 @@ export interface IndexerSnapshot {
     /** Head block the run observed. */
     headBlock: number;
     /**
-     * Launch reconstruction always scans from the earliest factory deployment
-     * to head, which is why launch counts are lifetime totals.
+     * Launch reconstruction covers the earliest factory deployment through
+     * head, including any preserved prefix and validated incremental scan.
      */
     launchScanIsFullHistory: true;
     /**
      * Curve events (trades, completions, graduations, creator-fee forwards)
-     * were also scanned from the earliest factory deployment to head, under
-     * the indexer's `--full-trades`. That is what makes `activity` a lifetime
-     * figure rather than a window's worth.
+     * cover the earliest factory deployment through head. Coverage can combine
+     * a reconciled historical prefix with a contiguous incremental scan.
      */
     curveScanIsFullHistory: true;
     /**
@@ -266,7 +270,8 @@ export interface IndexerSnapshot {
      * NOT a lifetime total and is deliberately not shown on the overview.
      */
     windowedScans: {
-      burns: readonly [number, number];
+      /** Null means this run did not scan burns; an old window is not advanced. */
+      burns: readonly [number, number] | null;
     };
     sanityChecks: { passed: number; total: number };
   };
@@ -274,10 +279,9 @@ export interface IndexerSnapshot {
   /**
    * Verification provenance, split by what was actually re-checked.
    *
-   * A single date here would imply the latest run re-verified everything. It
-   * did not: it re-read fee rates and splits across every curve, but never
-   * read NET_GRADUATION_TARGET and never re-derived the address book. Each
-   * area therefore carries its own date and evidence.
+   * A single date would imply the latest run re-verified everything. Each area
+   * carries the date and evidence of the work that actually established it;
+   * advancing event history does not advance these dates automatically.
    */
   verification: {
     feeModels: VerificationRecord;
@@ -293,6 +297,8 @@ export interface IndexerSnapshot {
    * exists to prevent.
    */
   activity: TransactionActivity;
+  /** Indexer-derived global actor and participant unions, validated before rendering. */
+  participants: ParticipantSnapshot;
   coverage: CoverageNote;
   source: SnapshotSource;
 }

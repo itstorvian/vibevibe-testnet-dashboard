@@ -35,6 +35,12 @@ export function MetricTiles() {
       primary: true,
     },
     {
+      label: "Indexed actor addresses",
+      value: formatCount(snapshot.participants.indexedActorAddressCount),
+      note: "Distinct creator, buyer and seller addresses across indexed launch and curve activity",
+      primary: true,
+    },
+    {
       label: "Current generation",
       value: current ? formatCount(current.launchCount) : "Not available",
       note: current
@@ -54,18 +60,11 @@ export function MetricTiles() {
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-      {tiles.map((tile, index) => (
+    <div className="grid grid-cols-1 gap-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
+      {tiles.map((tile) => (
         <div
           key={tile.label}
-          /*
-           * Five tiles leave a hole in the last row at two and three columns,
-           * and the gap-px trick paints that hole in the line colour. The last
-           * tile widens to close it, and returns to one column at five across.
-           */
-          className={`px-5 py-5 ${tile.primary ? "bg-surface" : "bg-canvas"} ${
-            index === tiles.length - 1 ? "sm:col-span-2 xl:col-span-1" : ""
-          }`}
+          className={`min-w-0 px-5 py-5 ${tile.primary ? "bg-surface" : "bg-canvas"}`}
         >
           <p
             className={`font-mono text-[10px] uppercase tracking-widest ${

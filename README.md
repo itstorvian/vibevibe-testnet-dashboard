@@ -9,8 +9,10 @@ Robinhood Chain. Testnet only, chain ID `46630`. All values are test values.
 This is a research interface, not a product. There is no trading, no wallet connection, no
 portfolio tracking, no rankings, and no write path of any kind.
 
-The Overview headline figures are **97,733 launches** and **2,098,026 indexed transactions**,
-both lifetime totals from the validated run of September 18, 2026 at head block `121,309,670`.
+The Overview headline figures are **160,851 launches**, **3,431,107 indexed transactions**,
+and **118,251 Indexed actor addresses** at pinned head `124,399,779` on September 26, 2026.
+The validated September 18 prefix was replayed offline and extended with only the new
+block range. Explore retains its separate September 17 enriched source.
 
 ---
 
@@ -120,12 +122,15 @@ state), the address copy control, and the Explore browser, which fetches one sha
 indexer's own terminology (`generation`, `label`, `launchId`, `dense`, `headBlock`) rather
 than renaming anything upstream.
 
-`src/data/snapshots/2026-09-18-121309670.ts` is the only place aggregate figures live.
-Snapshots are named by date and head block, because two validated runs can land on one day. It is a TypeScript literal
-checked with `satisfies IndexerSnapshot`, so a malformed snapshot is a compile error.
+`src/data/snapshots/2026-09-26-124399779.ts` selects the Overview aggregates, including
+the generated `participants-2026-09-26-124399779.json` artifact. The original September 18
+snapshot is preserved. A separate source file pins exact source identity, counts and hashes. Snapshots are named by
+date and head block, because two validated runs can land on one day. The schema-3
+TypeScript literal is checked with `satisfies IndexerSnapshot`; participant data also
+passes a runtime validator before it reaches React.
 `src/data/index.ts` picks the active one.
 
-Three rules the data layer enforces:
+Rules the data layer enforces:
 
 - **`totalLaunches` is derived, not stored.** It is summed from the generations in
   `src/data/derive.ts`, so the headline total can never disagree with the three numbers
@@ -140,17 +145,22 @@ Three rules the data layer enforces:
   and that `src/data/derive.ts` never mentions transactions at all. `activity.isFullHistory` is
   the literal `true`, so a snapshot from a windowed curve scan is a compile error rather than a
   review catch.
+- **Address unions are produced by the indexer.** The runtime participant validator pins
+  chain, source timestamps, start/head blocks, complete coverage, every authoritative
+  reconciliation count, diagnostics and set-count consistency. Components only render
+  these values. The snapshot test pins the exact adopted artifact's SHA-256 digest.
 
-To connect a newer run, add a snapshot file beside the existing one, repoint
-`activeSnapshot`, and rebuild the Explore shards from the same run. A test asserts that the
-Overview snapshot and the Explore manifest agree on the total, every per-generation count and
-every last-observed block, so the two cannot drift onto different runs.
+To connect a newer Overview run, add a validated snapshot beside the existing one and repoint
+`activeSnapshot`. Explore keeps its separately declared source in `src/data/explore-source.ts`.
+Only rebuild its shards when a suitable fully enriched run is available, then update that
+declaration. Tests check Explore's totals and block bounds against its own source and require
+the page to disclose the difference when Overview is newer.
 
 ---
 
 ## Indexed transactions
 
-The Overview's second headline figure. **2,098,026** on the adopted run.
+The Overview's transaction headline is **3,431,107** on the adopted snapshot.
 
 > **Definition.** The number of distinct transaction hashes observed across the launch and
 > curve event surfaces the upstream indexer covers, deduplicated globally.
@@ -160,19 +170,19 @@ indexed events, so summing rows overstates it, and so does summing the three cat
 
 | Category | Distinct transactions |
 |---|---|
-| Launch (`TokenLaunched`, `TokenLaunchedQuoted`) | 97,733 |
-| Curve trades (`Bought`, `Sold`) | 1,993,340 |
-| Curve lifecycle (`CurveCompleted`, `Graduated`, `CreatorFeesForwarded`) | 62,848 |
-| Sum of the above | 2,153,921 |
-| **Union, which is the published figure** | **2,098,026** |
-| Counted in more than one category | 55,895 |
+| Launch (`TokenLaunched`, `TokenLaunchedQuoted`) | 160,851 |
+| Curve trades (`Bought`, `Sold`) | 3,318,631 |
+| Curve lifecycle (`CurveCompleted`, `Graduated`, `CreatorFeesForwarded`) | 65,932 |
+| Sum of the above | 3,545,414 |
+| **Union, which is the published figure** | **3,431,107** |
+| Counted in more than one category | 114,307 |
 
 Graduation is the clearest case: `CurveCompleted`, `Graduated` and `CreatorFeesForwarded`
-land in the same transaction as the buy that triggered them. The run decoded 75,459 lifecycle
-events from only 62,848 distinct transactions for that reason.
+land in the same transaction as the buy that triggered them. The combined history contains 78,779 lifecycle
+events from 65,932 distinct transactions for that reason.
 
-**It is a lifetime total**, because that run scanned launches *and* curve events from the
-earliest factory deployment to head. A windowed curve scan cannot produce one, and the snapshot
+**It is a lifetime total for the configured surfaces**, because the preserved prefix and
+adjacent delta provide continuous launch and curve coverage from the earliest deployment to head. A windowed curve scan cannot produce one, and the snapshot
 type makes such a snapshot unrepresentable.
 
 **What it excludes.** The Overview lists these verbatim from the run rather than paraphrasing:
@@ -183,19 +193,45 @@ type makes such a snapshot unrepresentable.
 | Buyback and burn transfers | Plain ERC-20 `Transfer` logs, found by a separate scan with its own block window |
 | `LaunchFeesClaimed` | The operator's treasury sweep: neither launch nor curve activity |
 | Transactions emitting none of the included events | An approval, a plain transfer, a failed call, a read |
-| Launches from an unconfigured factory | Never scanned, silently |
+| Launches from an unconfigured factory | Outside metric scope; incremental discovery stops on an unknown published factory or known launch-event emitter |
 
 So the label is **"Indexed transactions"**, never "total transactions". Nothing in either
 repository could substantiate the second claim.
 
-**Source.** `output/activity.json` from the upstream run, carried into
-`src/data/snapshots/2026-09-18-121309670.ts` as `activity`. Regenerate with:
-
-```bash
-npm run index -- --full-trades --enrich-limit 800 --burn-window 2000000 --compare-api
-```
+**Source.** The indexer's `sample-output/current-124399779/overview.json`, with
+`incremental-proof.json` and the hashed input manifest. Reproduce with the indexer's offline
+`advance:snapshot` command after the delta is frozen. `--fetch` is explicit network opt-in;
+it scans only the adjacent delta. A full-history RPC run is unnecessary.
 
 ---
+
+## Indexed address participation
+
+The primary Overview metric is **Indexed actor addresses**: the global union of launch
+creators, Bought buyers and Sold sellers. Supporting detail shows **Indexed participant
+addresses**, which adds Bought recipients. Both are **118,251** in this snapshot: every
+buy recipient already appears in an actor role somewhere in the indexed history. Their
+definitions remain separate. A recipient-only address would affect only the broader count.
+
+The supporting panel includes creator, buyer/seller, recipient and trade-participant
+counts, both creator overlaps, and separate multi-project actor/participant counts.
+Categories overlap. More than one distinct factory-scoped project is required for a
+multi-project address; repeated events within one project do not qualify.
+
+These are cumulative event-role address counts. Contracts and intermediaries remain
+included. They do not measure distinct people or transaction senders. Lifecycle initiators,
+post-graduation DEX activity and unconfigured factories remain outside scope. No name,
+social or identity enrichment is performed. Time-windowed activity is not implemented.
+
+The current artifact combines the unchanged historical prefix through 121,309,670 with
+the complete delta 121,309,671–124,399,779. The prefix still reproduces 97,733 launches,
+2,098,026 transactions, 75,459 lifecycle events and 88,781 actor/participant addresses.
+The new artifact carries its pinned head hash, source timestamps, separate `derivedAt`,
+input-manifest hash and incremental proof hash. Full manifests remain in the indexer.
+
+Both participant and Overview aggregates pass runtime validation against fixed publication
+pins before reaching React. The adopted JSON copies are hash-tested against the indexer.
+Never adopt failed or unreconciled output. No Explore regeneration is needed.
 
 ## Two runs, named separately
 
@@ -203,7 +239,7 @@ Overview and Explore are built from **different runs**, and each says which.
 
 | Surface | Run | Head block | Launches |
 |---|---|---|---|
-| Overview `/` | 2026-09-18 | `121,309,670` | 97,733 |
+| Overview `/` | 2026-09-26 | `124,399,779` | 160,851 |
 | Explore `/explore` | 2026-09-17 | `120,753,391` | 96,490 |
 
 They shared a run until 2026-09-18. Rebuilding the Explore shards needs head state read for
@@ -229,28 +265,17 @@ the two back into one.
 
 **Nothing here is live, and the interface says so in several places.**
 
-The Overview figures come from one validated indexing run finished on September 18, 2026 at head
-block `121,309,670`. They stay fixed until a newer snapshot is connected. There is no polling, no
-relative "updated N minutes ago" timer, and no background refresh.
+Overview is fixed at block `124,399,779`, observed on September 26, 2026. The scan
+finished at `2026-09-26T03:52:52.510Z`; interruption/resume and the earlier pinned target
+are preserved in the proof. The head hash was checked before and after scanning.
+There is no polling, background refresh or finality claim.
 
-Launch counts are lifetime totals because launch reconstruction always scans from the earliest
-factory deployment to the head block. That is the one scan the indexer never windows.
-
-**Indexed transactions is also a lifetime total**, because that run scanned curve events over
-full history too (`--full-trades`). A windowed curve scan cannot produce a lifetime transaction
-count, and the snapshot type makes such a snapshot a compile error rather than a review catch.
-
-Volume and fee aggregates are available from that run but are deliberately still not carried in
-the snapshot: this project publishes no market view. Burn figures remain **windowed** to blocks
-`119,309,670` to `121,309,670` and are not lifetime totals. A test enforces that none of them
-reach the interface.
+Launch, transaction and participation totals cover the configured event surfaces through
+that head. The validated historical prefix remains unchanged. No burn scan, market
+aggregates or project-state enrichment were added. Fee models retain September 18
+verification; graduation targets retain September 13 verification.
 
 **Explore is on a different, older run.** See [Two runs, named separately](#two-runs-named-separately).
-
-The chain is active. Launches were still being created as the run reached its head block, so the
-real totals are already higher than what the page shows. The current factory was producing
-launches closest to the head, 3,086 blocks below it; legacy sat 216,297 blocks back and the
-retired factory 245,403.
 
 ---
 
@@ -260,21 +285,21 @@ These belong to the upstream indexer and are inherited here, not introduced by t
 
 1. **Factory discovery is manual.** No on-chain registry listing factory deployments was
    identified, so the indexer works from a hand maintained list. A factory that is not
-   configured is never scanned, and its launches would be missing from these totals with no
-   error and no warning. The Overview never claims coverage beyond what the configured indexer
-   observed.
+   configured is outside metric scope. Incremental advancement stops on an unknown published
+   factory or known launch-event emitter. Unpublished deployments using different signatures
+   remain outside this discovery method. The Overview keeps that limit explicit.
 2. **"Retired" is the operator's label, not an observed state.** The operator has dropped that
-   factory from every list it publishes, yet it accounts for 14,800 launches and added one
-   between the two most recent runs. Its most recent launch sits 245,403 blocks below the run's
-   head block, against 3,086 for the current factory, so it is trailing rather than idle. The
+   factory from every list it publishes, yet it accounts for 14,806 launches and added six
+   in this delta. Its most recent launch sits 723 blocks below the pinned head, against four
+   for the current factory. The
    interface reports the observed gap rather than calling the factory active or inactive.
 3. **Fee economics differ per generation.** The retired generation runs 100 bps at a 50/50
    split while legacy and current run 125 bps at 75/25. There is deliberately no single
    platform-wide rate anywhere in this project.
 4. **The legacy graduation target is unverified.** It was never read on chain, so it renders as
    "Not verified" rather than borrowing the current generation's 5 ETH.
-5. **Verification dates differ by field, on purpose.** The adopted run re-read fee rates and
-   splits across every curve, so those carry its date. It never read `NET_GRADUATION_TARGET`
+5. **Verification dates differ by field, on purpose.** The September 18 run re-read fee rates and
+   splits across its 800 sampled curves and checked event fee arithmetic, so those carry its date. It never read `NET_GRADUATION_TARGET`
    and never re-derived the address book, so those keep their earlier date. The interface
    shows both rather than one blended date.
 6. **"Indexed transactions" is scoped, not total.** It counts distinct transaction hashes on the
